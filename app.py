@@ -2,6 +2,15 @@ import streamlit as st
 import pickle
 import pandas as pd
 import requests
+import os
+import gdown
+
+if not os.path.exists('similarity.pkl'):
+    with st.spinner('Downloading recommendation model (first run only)...'):
+        file_id = '1bIpLLPGhqiGXO7blFFAIntM1o__2YInh'
+        url = f'https://drive.google.com/uc?id={'1bIpLLPGhqiGXO7blFFAIntM1o__2YInh'}'
+        gdown.download(url, 'similarity.pkl', quiet=False)
+
 
 # Load data
 movies_df = pickle.load(open('movies.pkl', 'rb'))
