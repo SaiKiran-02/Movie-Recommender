@@ -2,27 +2,93 @@ import streamlit as st
 import pickle
 import pandas as pd
 import requests
-import os
-import gdown
 
-if not os.path.exists('similarity.pkl'):
-    with st.spinner('Downloading recommendation model (first run only)...'):
-        file_id = '1bIpLLPGhqiGXO7blFFAIntM1o__2YInh'
-        url = f'https://drive.google.com/uc?id=file_id'
-        gdown.download(url, 'similarity.pkl', quiet=False)
+# Page configuration
+st.set_page_config(
+    page_title="Movie Recommender System",
+    page_icon="🎬",
+    layout="wide"
+)
+
+# Custom CSS for styling
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #FF4B4B;
+        text-align: center;
+        margin-bottom: 2rem;
+        padding-top: 1rem;
+    }
+    .subheader {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #1E88E5;
+        margin-bottom: 1rem;
+    }
+    .movie-title {
+        font-weight: bold;
+        font-size: 1rem;
+        margin-bottom: 0.5rem;
+        text-align: center;
+        height: 3rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .stButton > button {
+        background-color: #FF4B4B;
+        color: white;
+        border-radius: 6px;
+        padding: 0.5rem 2rem;
+        font-weight: bold;
+        border: none;
+        width: 100%;
+    }
+    .stButton > button:hover {
+        background-color: #E03131;
+    }
+    .stImage {
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        transition: transform 0.3s;
+    }
+    .stImage:hover {
+        transform: scale(1.03);
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# App header
+st.markdown('<div class="main-header">🎬 Movie Recommender System</div>', unsafe_allow_html=True)
 
 
 # Load data
-movies_df = pickle.load(open('movies.pkl', 'rb'))
-similarity = pickle.load(open('similarity.pkl', 'rb'))
+@st.cache_resource
+def load_data():
+    movies_df = pickle.load(open('movies.pkl', 'rb'))
+    similarity = pickle.load(open('similarity.pkl', 'rb'))
+    return movies_df, similarity
+
+
+movies_df, similarity = load_data()
 
 # Create a list of movie titles for the dropdown
 movie_titles = movies_df['title'].values
 
+
 def fetch_poster(movie_id):
-    response = requests.get('https://api.themoviedb.org/3/movie/{}?api_key=d70d20613fd134fb32f9d0431dd166a3&language=en-US'.format(movie_id))
-    data = response.json()
-    return "https://image.tmdb.org/t/p/w500/" + data['poster_path']
+    try:
+        response = requests.get(
+            f'https://api.themoviedb.org/3/movie/{movie_id}?api_key=d70d20613fd134fb32f9d0431dd166a3&language=en-US')
+        data = response.json()
+        if 'poster_path' in data and data['poster_path']:
+            return "https://image.tmdb.org/t/p/w500/" + data['poster_path']
+        return "https://via.placeholder.com/500x750?text=No+Poster+Available"
+    except:
+        return "https://via.placeholder.com/500x750?text=Error+Loading+Poster"
+
 
 def recommend(movie):
     movie_index = movies_df[movies_df['title'] == movie].index[0]
@@ -30,43 +96,52 @@ def recommend(movie):
     similar_movies = sorted(list(enumerate(distances)), reverse=True, key=lambda x: x[1])[1:6]
 
     recommended_movies = []
-    recommended_movies_poster =[]
+    recommended_movies_poster = []
     for i in similar_movies:
         movie_id = movies_df.iloc[i[0]].movie_id
         # fetching poster using API from TMDB
         recommended_movies_poster.append(fetch_poster(movie_id))
         recommended_movies.append(movies_df.iloc[i[0]].title)
 
-    return recommended_movies , recommended_movies_poster
+    return recommended_movies, recommended_movies_poster
 
 
-st.title('Movie Recommender System')
+# Input section without white container
+with st.container():
+    st.markdown('<div class="subheader">Find Your Next Favorite Movie</div>', unsafe_allow_html=True)
 
-selected_movie_name = st.selectbox(
-    'Enter the movie you like!',
-    movie_titles
-)
-
-if st.button('Recommend'):
-    name,poster= recommend(selected_movie_name)
-    col1, col2, col3 , col4 , col5 = st.columns(5)
+    col1, col2 = st.columns([3, 1])
 
     with col1:
-        st.text(name[0])
-        st.image(poster[0])
+        selected_movie_name = st.selectbox(
+            'Select a movie you enjoyed:',
+            movie_titles,
+            index=0,
+            help="Choose a movie you liked, and we'll recommend similar ones!"
+        )
 
     with col2:
-        st.text(name[1])
-        st.image(poster[1])
+        recommend_button = st.button('Get Recommendations')
 
-    with col3:
-        st.text(name[2])
-        st.image(poster[2])
+# Show recommendations
+if recommend_button:
+    with st.spinner('Finding similar movies for you...'):
+        name, poster = recommend(selected_movie_name)
 
-    with col4:
-        st.text(name[3])
-        st.image(poster[3])
+    st.markdown(f'<div class="subheader">Because you liked "{selected_movie_name}", you might enjoy:</div>',
+                unsafe_allow_html=True)
 
-    with col4:
-        st.text(name[4])
-        st.image(poster[4])
+    # Display recommendations in a grid
+    cols = st.columns(5)
+
+    for i in range(5):
+        with cols[i]:
+            st.markdown(f'<div class="movie-title">{name[i]}</div>', unsafe_allow_html=True)
+            st.image(poster[i], use_container_width=True)
+
+# Footer
+st.markdown("""
+<div style="text-align: center; margin-top: 3rem; padding: 1rem; color: #555; font-size: 0.8rem;">
+    Powered by TMDB API | Movie data provided by The Movie Database
+</div>
+""", unsafe_allow_html=True)
